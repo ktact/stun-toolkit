@@ -26,10 +26,6 @@ import struct
 import os
 import binascii
 
-# STUN server IP and port
-STUN_SERVER = "stun.l.google.com"
-STUN_PORT   = 19302
-
 # Message types
 BINDING_REQUEST = 0x0001
 
@@ -37,14 +33,14 @@ BINDING_REQUEST = 0x0001
 MAPPED_ADDRESS     = 0x0001
 XOR_MAPPED_ADDRESS = 0x0020
 
-def main(STUN_SERVER, STUN_PORT):
+def main(server, port):
     # Create a binding request with a random transaction ID
     transaction_id = os.urandom(12)
     stun_request = struct.pack("!HHI12s", BINDING_REQUEST, 0, 0x2112A442, transaction_id)
 
     # Send the request to the STUN server
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.sendto(stun_request, (STUN_SERVER, STUN_PORT))
+    sock.sendto(stun_request, (server, port))
 
     # Receive the response from the server
     data, addr = sock.recvfrom(2048)
