@@ -13,9 +13,14 @@ attribute to obtain the public IP address and port.
 This code can be used in contexts where you need to discover the public endpoint of a
 client behind a NAT, such as in peer-to-peer networking or WebRTC applications.
 
-Usage: python3 stun_client.py
+Usage:
+    python3 stun_client.py
+
+    You can specify the server and the port as below:
+        python3 stun_client.py --server stun.l.google.com --port 19302
 """
 
+import argparse
 import socket
 import struct
 import os
@@ -32,47 +37,56 @@ BINDING_REQUEST = 0x0001
 MAPPED_ADDRESS     = 0x0001
 XOR_MAPPED_ADDRESS = 0x0020
 
-# Create a binding request with a random transaction ID
-transaction_id = os.urandom(12)
-stun_request = struct.pack("!HHI12s", BINDING_REQUEST, 0, 0x2112A442, transaction_id)
+def main(STUN_SERVER, STUN_PORT):
+    # Create a binding request with a random transaction ID
+    transaction_id = os.urandom(12)
+    stun_request = struct.pack("!HHI12s", BINDING_REQUEST, 0, 0x2112A442, transaction_id)
 
-# Send the request to the STUN server
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.sendto(stun_request, (STUN_SERVER, STUN_PORT))
+    # Send the request to the STUN server
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(stun_request, (STUN_SERVER, STUN_PORT))
 
-# Receive the response from the server
-data, addr = sock.recvfrom(2048)
+    # Receive the response from the server
+    data, addr = sock.recvfrom(2048)
 
-# Print the response in hex
-print("Response in hex: ")
-print(binascii.hexlify(data))
+    # Print the response in hex
+    print("Response in hex: ")
+    print(binascii.hexlify(data))
 
-# Parse the header
-msg_type, msg_length, magic_cookie, response_transaction_id = struct.unpack("!HHI12s", data[:20])
+    # Parse the header
+    msg_type, msg_length, magic_cookie, response_transaction_id = struct.unpack("!HHI12s", data[:20])
 
-if msg_type != 0x0101 or transaction_id != response_transaction_id:
-    print("Invalid STUN response")
-    exit(1)
+    if msg_type != 0x0101 or transaction_id != response_transaction_id:
+        print("Invalid STUN response")
+        exit(1)
 
-# Process the attributes
-pos = 20
-while pos < len(data):
-    attr_type, attr_length = struct.unpack("!HH", data[pos:pos+4])
+    # Process the attributes
+    pos = 20
+    while pos < len(data):
+        attr_type, attr_length = struct.unpack("!HH", data[pos:pos+4])
 
-    if attr_type == 0x0020:  # XOR-MAPPED-ADDRESS
-        # Skip the first byte after the attribute type and length
-        pos += 1
+        if attr_type == 0x0020:  # XOR-MAPPED-ADDRESS
+            # Skip the first byte after the attribute type and length
+            pos += 1
 
-        family, xor_port = struct.unpack("!BH", data[pos+4:pos+7])
+            family, xor_port = struct.unpack("!BH", data[pos+4:pos+7])
 
-        # XOR the port with the most significant 16 bits of the magic cookie
-        port = xor_port ^ (0x2112A442 >> 16)
-        # XOR the IP address with the magic cookie and transaction ID
-        xor_address = struct.unpack("!I", data[pos+7:pos+11])[0]
-        address = socket.inet_ntop(socket.AF_INET, struct.pack("!I", xor_address ^ 0x2112A442))
-        print("Public IP address (XOR):", address)
-        print("Public port (XOR):", port)
+            # XOR the port with the most significant 16 bits of the magic cookie
+            port = xor_port ^ (0x2112A442 >> 16)
+            # XOR the IP address with the magic cookie and transaction ID
+            xor_address = struct.unpack("!I", data[pos+7:pos+11])[0]
+            address = socket.inet_ntop(socket.AF_INET, struct.pack("!I", xor_address ^ 0x2112A442))
+            print("Public IP address (XOR):", address)
+            print("Public port (XOR):", port)
 
-    pos += 4 + attr_length
+        pos += 4 + attr_length
 
-sock.close()
+    sock.close()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Discover public IP and port using STUN")
+    parser.add_argument("--server", default="stun.l.google.com", help="STUN server address (default: stun.l.google.com)")
+    parser.add_argument("--port", type=int, default=19302, help="STUN server port (default: 19302)")
+    args = parser.parse_args()
+
+    main(args.server, args.port)
