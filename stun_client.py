@@ -33,10 +33,12 @@ BINDING_REQUEST = 0x0001
 MAPPED_ADDRESS     = 0x0001
 XOR_MAPPED_ADDRESS = 0x0020
 
-def main(server, port):
+def main(server, port, change_request_flags):
     # Create a binding request with a random transaction ID
     transaction_id = os.urandom(12)
     stun_request = struct.pack("!HHI12s", BINDING_REQUEST, 0, 0x2112A442, transaction_id)
+    if change_request_flags:
+        stun_request += struct.pack("!HHI", 0x0003, 4, change_request_flags)
 
     # Send the request to the STUN server
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -83,6 +85,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Discover public IP and port using STUN")
     parser.add_argument("--server", default="stun.l.google.com", help="STUN server address (default: stun.l.google.com)")
     parser.add_argument("--port", type=int, default=19302, help="STUN server port (default: 19302)")
+    parser.add_argument("--change-ip", action="store_true", help="Request the server to use a different IP for the response")
+    parser.add_argument("--change-port", action="store_true", help="Request the server to use a different port for the response")
     args = parser.parse_args()
 
-    main(args.server, args.port)
+    # Build the change request flags based on the command-line arguments
+    change_request_flags = 0
+    if args.change_ip:
+        change_request_flags |= 0x04
+    if args.change_port:
+        change_request_flags |= 0x02
+
+    main(args.server, args.port, change_request_flags)
